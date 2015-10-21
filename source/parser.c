@@ -1,10 +1,10 @@
 #include "mantra.h"
 
+
+
 int PARSER_DEBUG;
-
-
-
-char * NODE_TYPES[] = {"program", "error", "end of file", "evaluation", "string literal", "numeric literal"};
+char * NODE_TYPES[] = {"program", "error", "end of file", "sequence",
+					   "symbol", "string literal", "numeric literal"};
 
 Node *new_Node(Token *token, NodeType type)
 {
@@ -83,6 +83,7 @@ void Node_printnode(Node *self, int level)
 	char *string = "";
 	if (self->token) string = self->token->string;
 	printf("%s %s\n", NODE_TYPES[self->type], string);
+	//printf("%s\n", string);
 	i = 0;
 	while (i < self->num_children)
 		Node_printnode(self->children[i++], level+1);
@@ -143,38 +144,13 @@ Node *Parser_error(Parser *self, Node *err)
 	return err;
 }
 
-Node *Parser_statement(Parser *self, Node *parent)
+Node *Parser_element(Parser *self, Node *parent)
 {
-	if (Parser_found(self, EOF_TOKEN))
+	if (Parser_found(self, SYMBOL_TOKEN))
 	{
-		return new_Node(self->curr, EOF_NODE);
-	}
-
-	else
-	{
-		Node *statement = Parser_evaluation(self, parent);
-		if (!Parser_expect(self, SEMICOLON_TOKEN))
-			return Parser_error(self, statement);
-		return statement;
-	}
-}
-
-Node *Parser_evaluation(Parser *self, Node *parent)
-{
-	if (Parser_found(self, IDENTIFIER_TOKEN))
-	{
-		Node *eval = new_Node(self->curr, EVALUATION_NODE);
+		Node *node = new_Node(self->curr, SYMBOL_NODE);
 		Parser_step(self);
-		if (Parser_found(self, OPEN_PAREN_TOKEN))
-		{
-			Parser_step(self);
-			Parser_sequence(self, eval);
-			if (!Parser_expect(self, CLOSE_PAREN_TOKEN))
-				return Parser_error(self, eval);
-			Parser_step(self);
-		}
-
-		return eval;
+		return node;
 	}
 
 	else if (Parser_found(self, STRING_LITERAL_TOKEN))
@@ -191,38 +167,54 @@ Node *Parser_evaluation(Parser *self, Node *parent)
 		return number;
 	}
 
+	else if (Parser_found(self, OPEN_PAREN_TOKEN))
+	{
+		Node *sequence = Parser_sequence(self, parent);
+		Parser_step(self);
+		return sequence;
+	}	
+
 	else
 	{
 		Node *unknown = new_Node(self->curr, ERROR_NODE);
-		printf("ParseError at line %d col %d: expected evaluation, got %s\n",
+		printf("ParseError at line %d col %d: expected element, got %s\n",
 				self->curr->source_line, self->curr->source_col,
 				self->curr->string);
+		Parser_step(self);
 		return Parser_error(self, unknown);
 	}
 }
 
 Node *Parser_sequence(Parser *self, Node *parent)
 {
-	if (!Parser_found(self, CLOSE_PAREN_TOKEN))
-	{
-		Node *elem = Parser_evaluation(self, parent);
-		Node_addchild(parent, elem);
+	if (Parser_found(self, EOF_TOKEN))
+		return new_Node(self->curr, EOF_NODE);
 
-		while (Parser_found(self, COMMA_TOKEN))
+	Node *sequence = new_Node(NULL, SEQUENCE_NODE);
+
+	if (!Parser_expect(self, OPEN_PAREN_TOKEN))
+		return Parser_error(self, sequence);
+	Parser_step(self);
+	while (!Parser_found(self, CLOSE_PAREN_TOKEN))
+	{
+		Node *elem = Parser_element(self, parent);
+		Node_addchild(sequence, elem);
+
+		/*while (Parser_found(self, COMMA_TOKEN))
 		{
 			Parser_step(self);
-			Node *elem = Parser_evaluation(self, parent);
-			Node_addchild(parent, elem);
-		}
+			Node *elem = Parser_element(self, parent);
+			Node_addchild(sequence, elem);
+		}*/
 	}
-	return parent;
+	return sequence;
 }
 
 Node *Parser_getnext(Parser *self)
 {
 	Parser_step(self);
 	PROMPT = CONTINUE_PROMPT;
-	Node *next = Parser_statement(self, self->root);
+	Node *next = Parser_sequence(self, self->root);
 	PROMPT = COMMAND_PROMPT;
 	if (next && next->type != EOF_NODE) Node_addchild(self->root, next);
 	return next;
@@ -233,19 +225,20 @@ Node *Parser_getnext(Parser *self)
 #ifdef PARSER_TEST
 int main(int argc, char **argv)
 {
+
 	if (argc < 2) SOURCE = stdin;
 	else SOURCE = fopen(argv[1], "r");
-	if (isatty(SOURCE))
+	if (isatty(fileno(SOURCE)))
 	{
 		INTERACTIVE_MODE = 1;
+		PROMPT = COMMAND_PROMPT;
 		fputs(SPLASH_MESSAGE, stderr);
 	}
 	else INTERACTIVE_MODE = 0;
-	
-#ifdef DEBUG
+
+	#ifdef DEBUG
 	PARSER_DEBUG = 1;
-#endif
-	if (PARSER_DEBUG) printf("[Parser debugging mode]\n");
+	#endif 
 
 	Parser *my_parser = new_Parser(SOURCE);
 	while (1)

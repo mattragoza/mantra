@@ -2,7 +2,7 @@
 
 
 
-char * TOKEN_TYPES[] = {"end of file", "identifier", "numeric literal", "string literal",
+char * TOKEN_TYPES[] = {"end of file", "symbol", "numeric literal", "string literal",
 						"open paren", "close paren", "comma", "period", "minus",
 						"semicolon", "unknown"};
 
@@ -108,12 +108,37 @@ Token *Lexer_getnext(Lexer *self)
 		token->type = EOF_TOKEN;
 	}
 
-	else if (Character_isin(self->frame, IDENTIFIER_START_CHARS))
+	else if (self->frame->value == '.')
 	{
-		token->type = IDENTIFIER_TOKEN;
+		token->type = SYMBOL_TOKEN;
+		Lexer_step(self);
+		int certain = 0;
+
+		while (!certain && Character_isin(self->frame, NUMERIC_CHARS)) // decimal
+		{
+			if (token->type != NUMERIC_LITERAL_TOKEN)
+				token->type = NUMERIC_LITERAL_TOKEN;
+
+			Token_append(token, self->frame);
+			Lexer_step(self);
+		}
+		if (token->type == NUMERIC_LITERAL_TOKEN) certain = 1;
+		while (!certain && Character_isin(self->frame, SYMBOL_CHARS)) // symbol
+		{
+			if (token->type != SYMBOL_TOKEN)
+				token->type = SYMBOL_TOKEN;
+
+			Token_append(token, self->frame);
+			Lexer_step(self);
+		}
+	}
+
+	else if (Character_isin(self->frame, SYMBOL_CHARS))
+	{
+		token->type = SYMBOL_TOKEN;
 		Lexer_step(self);
 
-		while (Character_isin(self->frame, IDENTIFIER_CHARS))
+		while (Character_isin(self->frame, SYMBOL_CHARS))
 		{
 			Token_append(token, self->frame);
 			Lexer_step(self);
@@ -125,9 +150,10 @@ Token *Lexer_getnext(Lexer *self)
 	{
 		token->type = NUMERIC_LITERAL_TOKEN;
 		Lexer_step(self);
-
-		while (Character_isin(self->frame, NUMERIC_CHARS))
+		int decimal = 0;
+		while (Character_isin(self->frame, NUMERIC_CHARS) || (!decimal && self->frame->value == '.'))
 		{
+			if (self->frame->value == '.') decimal = 1;
 			Token_append(token, self->frame);
 			Lexer_step(self);
 		}
@@ -162,23 +188,7 @@ Token *Lexer_getnext(Lexer *self)
 		Lexer_step(self);
 	}
 
-	else if (self->frame->value == ',')
-	{
-		token->type = COMMA_TOKEN;
-		Lexer_step(self);
-	}
 
-	else if (self->frame->value == '-')
-	{
-		token->type = MINUS_TOKEN;
-		Lexer_step(self);
-	}
-
-	else if (self->frame->value == ';')
-	{
-		token->type = SEMICOLON_TOKEN;
-		Lexer_step(self);
-	}
 	// TODO the rest of operators down here too
 	else
 	{
@@ -194,10 +204,11 @@ int main(int argc, char **argv)
 {
 	if (argc < 2) SOURCE = stdin;
 	else SOURCE = fopen(argv[1], "r");
-	if (isatty(SOURCE))
+	if (isatty(fileno(SOURCE)))
 	{
 		INTERACTIVE_MODE = 1;
 		fputs(SPLASH_MESSAGE, stderr);
+		fputs(COMMAND_PROMPT, stderr);
 	}
 	else INTERACTIVE_MODE = 0;
 	

@@ -164,10 +164,11 @@ int main(int argc, char **argv)
 {
 	if (argc < 2) SOURCE = stdin;
 	else SOURCE = fopen(argv[1], "r");
-	if (isatty(SOURCE))
+	if (isatty(fileno(SOURCE)))
 	{
 		INTERACTIVE_MODE = 1;
 		fputs(SPLASH_MESSAGE, stderr);
+		fputs(COMMAND_PROMPT, stderr);
 	}
 	else INTERACTIVE_MODE = 0;
 	

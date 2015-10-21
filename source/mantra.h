@@ -8,15 +8,14 @@
 #define BUFFER_SIZE 4096
 #define SPLASH_MESSAGE "The Mantra Language\n"
 #define COMMAND_PROMPT "> "
-#define CONTINUE_PROMPT "  "
+#define CONTINUE_PROMPT "+ "
 
 FILE *SOURCE;
 char *PROMPT;
 int INTERACTIVE_MODE;
 
 #define WHITESPACE_CHARS " \t\n"
-#define IDENTIFIER_START_CHARS "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-#define IDENTIFIER_CHARS "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_"
+#define SYMBOL_CHARS "+-=*/^%%_><abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 #define NUMERIC_CHARS "01234567890"
 #define STRING_LITERAL_CHARS "\"'"
 
@@ -81,7 +80,7 @@ char Scanner_peek(Scanner *, int); 		// peek at the char some given steps ahead 
 	These types are differentiated using the TokenType enumeration
 */
 typedef enum {
-	EOF_TOKEN, IDENTIFIER_TOKEN, NUMERIC_LITERAL_TOKEN, STRING_LITERAL_TOKEN,
+	EOF_TOKEN, SYMBOL_TOKEN, NUMERIC_LITERAL_TOKEN, STRING_LITERAL_TOKEN,
 	OPEN_PAREN_TOKEN, CLOSE_PAREN_TOKEN, COMMA_TOKEN, PERIOD_TOKEN, MINUS_TOKEN,
 	SEMICOLON_TOKEN, UNKNOWN_TOKEN
 } TokenType;
@@ -110,8 +109,8 @@ void Token_append(Token *, Character *);	// append a Character to the Token's in
 */
 typedef struct lexer_t
 {
-	Scanner *scanner;	// the Scanner used to get Characters from source
-	Character *frame; 	// current character "frame" for identifying tokens
+	struct scanner_t *scanner;	// the Scanner used to get Characters from source
+	struct character_t *frame; 	// current character "frame" for identifying tokens
 
 } Lexer;
 Lexer *new_Lexer(FILE *); 			// constructor
@@ -126,7 +125,7 @@ Token *Lexer_getnext(Lexer *self);	// returns the next identified Token in the s
 	Node is a node in the syntax tree
 */
 typedef enum {
-	PROGRAM_NODE, ERROR_NODE, EOF_NODE, EVALUATION_NODE, STRING_LITERAL_NODE, NUMERIC_LITERAL_NODE
+	PROGRAM_NODE, ERROR_NODE, EOF_NODE, SEQUENCE_NODE, SYMBOL_NODE, STRING_LITERAL_NODE, NUMERIC_LITERAL_NODE
 } NodeType;
 char * NODE_TYPES[10];
 typedef struct node_t
@@ -137,6 +136,7 @@ typedef struct node_t
 	int num_children;
 	int max_children;
 	int level;
+
 } Node;
 Node *new_Node(Token *, NodeType);	// constructor
 void del_Node(Node *); 				// destructor
@@ -156,7 +156,7 @@ typedef struct parser_t
 	FILE *source;
 	struct lexer_t *lexer;
 	struct token_t *curr;
-	struct node_t  *root;
+	struct node_t *root;
 
 } Parser;
 Parser *new_Parser(FILE *);			// constructor
@@ -164,9 +164,30 @@ void del_Parser(Parser *);			// destructor
 void Parser_step(Parser *);
 int Parser_found(Parser *, TokenType);
 int Parser_expect(Parser *, TokenType);
-Node *Parser_statement(Parser *, Node *);
-Node *Parser_evaluation(Parser *, Node *);
+Node *Parser_element(Parser *, Node *);
 Node *Parser_sequence(Parser *, Node *);
 
 
+/*
+typedef struct scope_t
+{
+	Scope *parent;
+
+} Scope;
+Scope *new_Scope(Scope *);
+void del_Scope(Scope *);
+
+
+
+typedef struct interpreter_t
+{
+	Parser *parser;
+	Scope  *scope;
+
+} Interpreter;
+Interpreter *new_Interpreter(FILE *);
+void del_Interpreter(Interpreter *);
+
+
+*/
 #endif // MANTRA_H
