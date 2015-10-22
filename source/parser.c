@@ -14,7 +14,6 @@ Node *new_Node(Token *token, NodeType type)
 	self->children = malloc(2*sizeof(Node *));
 	self->num_children = 0;
 	self->max_children = 2;
-	//self->level;
 	return self;
 }
 
@@ -74,7 +73,7 @@ void Node_removechild(Node *self, int index)
 	return;
 }
 
-void Node_printnode(Node *self, int level)
+void Node_print(Node *self, int level)
 {
 	if (self == NULL) return;
 	int i = level;
@@ -86,7 +85,7 @@ void Node_printnode(Node *self, int level)
 	//printf("%s\n", string);
 	i = 0;
 	while (i < self->num_children)
-		Node_printnode(self->children[i++], level+1);
+		Node_print(self->children[i++], level+1);
 }
 
 
@@ -131,10 +130,10 @@ int Parser_expect(Parser *self, TokenType expected)
 {
 	if (PARSER_DEBUG) printf("[Parser expects %s]\n", TOKEN_TYPES[expected]);
 	if (Parser_found(self, expected)) return 1;
-	else fprintf(stderr, "ParseError at line %d col %d: expected %s, got %s\n",
-		self->curr->source_line, self->curr->source_col,
+	else fprintf(stderr, "Parser error at line %d col %d: expected %s, got %s\n",
+		self->curr->source_line+1, self->curr->source_col+1,
 		TOKEN_TYPES[expected], TOKEN_TYPES[self->curr->type]);
-	return 0;
+	exit(1);
 }
 
 Node *Parser_error(Parser *self, Node *err)
@@ -172,16 +171,15 @@ Node *Parser_element(Parser *self, Node *parent)
 		Node *sequence = Parser_sequence(self, parent);
 		Parser_step(self);
 		return sequence;
-	}	
+	}
 
 	else
 	{
 		Node *unknown = new_Node(self->curr, ERROR_NODE);
-		printf("ParseError at line %d col %d: expected element, got %s\n",
-				self->curr->source_line, self->curr->source_col,
-				self->curr->string);
-		Parser_step(self);
-		return Parser_error(self, unknown);
+		printf("Parser error at line %d col %d: expected element, got %s\n",
+				self->curr->source_line+1, self->curr->source_col+1,
+				TOKEN_TYPES[self->curr->type]);
+		exit(1);
 	}
 }
 
@@ -225,7 +223,6 @@ Node *Parser_getnext(Parser *self)
 #ifdef PARSER_TEST
 int main(int argc, char **argv)
 {
-
 	if (argc < 2) SOURCE = stdin;
 	else SOURCE = fopen(argv[1], "r");
 	if (isatty(fileno(SOURCE)))
@@ -249,7 +246,7 @@ int main(int argc, char **argv)
 			del_Node(node);
 			break;
 		}
-		Node_printnode(node, 0);
+		Node_print(node, 0);
 	}
 	del_Parser(my_parser);
 	return 0;

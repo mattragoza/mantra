@@ -110,7 +110,7 @@ Token *Lexer_getnext(Lexer *self)
 
 	else if (self->frame->value == '.')
 	{
-		token->type = SYMBOL_TOKEN;
+		token->type = PERIOD_TOKEN;
 		Lexer_step(self);
 		int certain = 0;
 
@@ -118,15 +118,6 @@ Token *Lexer_getnext(Lexer *self)
 		{
 			if (token->type != NUMERIC_LITERAL_TOKEN)
 				token->type = NUMERIC_LITERAL_TOKEN;
-
-			Token_append(token, self->frame);
-			Lexer_step(self);
-		}
-		if (token->type == NUMERIC_LITERAL_TOKEN) certain = 1;
-		while (!certain && Character_isin(self->frame, SYMBOL_CHARS)) // symbol
-		{
-			if (token->type != SYMBOL_TOKEN)
-				token->type = SYMBOL_TOKEN;
 
 			Token_append(token, self->frame);
 			Lexer_step(self);

@@ -135,14 +135,13 @@ typedef struct node_t
 	struct node_t **children;
 	int num_children;
 	int max_children;
-	int level;
 
 } Node;
 Node *new_Node(Token *, NodeType);	// constructor
 void del_Node(Node *); 				// destructor
 void Node_addchild(Node *, Node *);
 void Node_removechild(Node *, int);
-void Node_printnode(Node *, int);
+void Node_print(Node *, int);
 
 
 
@@ -166,28 +165,79 @@ int Parser_found(Parser *, TokenType);
 int Parser_expect(Parser *, TokenType);
 Node *Parser_element(Parser *, Node *);
 Node *Parser_sequence(Parser *, Node *);
+Node *Parser_getnext(Parser *);
 
 
-/*
-typedef struct scope_t
+
+typedef enum {
+	NUMBER_OBJECT, STRING_OBJECT, SEQUENCE_OBJECT
+} ObjectType;
+char * OBJECT_TYPES[3];
+
+#define Object_HEADER \
+	int ref_count;\
+	ObjectType type;
+
+typedef struct object_t { // since all objects start with this, we can use it for duck typing
+	Object_HEADER
+} Object;
+typedef struct number_object_t {
+	Object_HEADER
+	double value;
+} NumberObject;
+typedef struct string_object_t {
+	Object_HEADER
+	int len;
+	int cap;
+	char *buffer;
+} StringObject;
+typedef struct sequence_object_t {
+	Object_HEADER
+	int len;
+	int cap;
+	Object **elem;
+} SequenceObject;
+typedef struct function_object_t {
+	Object_HEADER
+	Object *arg;
+	Object *(*f)();
+} FunctionObject;
+Object *new_NumberObject(Node *);
+Object *new_StringObject(Node *);
+Object *new_SequenceObject(Node *);
+Object *new_FunctionObject(Node *);
+void del_Object(Object *);
+char *Object_tostring(Object *);
+void Object_append(Object *, Object *);
+
+
+
+typedef struct context_t
 {
-	Scope *parent;
+	struct context_t *parent;
+	int num, cap;
+	struct object_t **map;
 
-} Scope;
-Scope *new_Scope(Scope *);
-void del_Scope(Scope *);
+} Context;
+Context *new_Context(Context *);
+void del_Context(Context *);
+long Context_hash(Context *, char *);
+Object *Context_get(Context *, char *);
+void Context_set(Context *, char *, Object *);
 
 
 
 typedef struct interpreter_t
 {
-	Parser *parser;
-	Scope  *scope;
+	struct parser_t *parser;
+	struct context_t *global;
 
 } Interpreter;
 Interpreter *new_Interpreter(FILE *);
 void del_Interpreter(Interpreter *);
+Object *Interpreter_eval(Interpreter *, Node *, Context *);
+Object *Interpreter_evalnext(Interpreter *);
 
 
-*/
+
 #endif // MANTRA_H
