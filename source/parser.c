@@ -4,7 +4,7 @@
 
 int PARSER_DEBUG;
 char * NODE_TYPES[] = {"program", "error", "end of file", "sequence",
-					   "symbol", "string literal", "numeric literal"};
+		       "symbol", "string literal", "numeric literal"};
 
 Node *new_Node(Token *token, NodeType type)
 {
@@ -113,32 +113,22 @@ void del_Parser(Parser *self)
 void Parser_step(Parser *self)
 {
 	self->curr = Lexer_getnext(self->lexer);
-	if (PARSER_DEBUG) printf("[Parser steps to %s]\n", self->curr->string);
+	if (PARSER_DEBUG) fprintf(stderr, "[Parser steps to %s]\n", self->curr->string);
 	return;
 }
 
 int Parser_found(Parser *self, TokenType match)
 {
-	if (PARSER_DEBUG) printf("[Parser found %s, was looking for %s]\n", TOKEN_TYPES[self->curr->type], TOKEN_TYPES[match]);
+	if (PARSER_DEBUG) fprintf(stderr, "[Parser found %s, comparing to %s]\n", TOKEN_TYPES[self->curr->type], TOKEN_TYPES[match]);
 	if (self->curr->type == match)
 		return 1;
 	else
 		return 0;
 }
 
-int Parser_expect(Parser *self, TokenType expected)
-{
-	if (PARSER_DEBUG) printf("[Parser expects %s]\n", TOKEN_TYPES[expected]);
-	if (Parser_found(self, expected)) return 1;
-	else fprintf(stderr, "Parser error at line %d col %d: expected %s, got %s\n",
-		self->curr->source_line+1, self->curr->source_col+1,
-		TOKEN_TYPES[expected], TOKEN_TYPES[self->curr->type]);
-	exit(1);
-}
-
 Node *Parser_error(Parser *self, Node *err)
 {
-	if (PARSER_DEBUG) printf("[Parser is complaining, but we should keep going]\n");
+	if (PARSER_DEBUG) fprintf(stderr, "[Parser is complaining, but we should keep going]\n");
 	err->type = ERROR_NODE;
 	return err;
 }
@@ -173,13 +163,23 @@ Node *Parser_element(Parser *self, Node *parent)
 		return sequence;
 	}
 
+	else if (Parser_found(self, EOF_TOKEN))
+	{
+		Node *eof = new_Node(self->curr, EOF_NODE);
+		//fprintf(stderr, "Parser error at line %d col %d: expected element or close paren, got %s\n",
+		//		self->curr->source_line+1, self->curr->source_col+1,
+		//		TOKEN_TYPES[self->curr->type]);
+		return eof;
+	}
+
 	else
 	{
-		Node *unknown = new_Node(self->curr, ERROR_NODE);
-		printf("Parser error at line %d col %d: expected element, got %s\n",
-				self->curr->source_line+1, self->curr->source_col+1,
-				TOKEN_TYPES[self->curr->type]);
-		exit(1);
+		Node *unexpected = new_Node(self->curr, -1);
+		//fprintf(stderr, "Parser error at line %d col %d: expected element or close paren, got %s\n",
+		//		self->curr->source_line+1, self->curr->source_col+1,
+		//		TOKEN_TYPES[self->curr->type]);
+		Parser_step(self);
+		return Parser_error(self, unexpected);
 	}
 }
 
@@ -190,20 +190,18 @@ Node *Parser_sequence(Parser *self, Node *parent)
 
 	Node *sequence = new_Node(NULL, SEQUENCE_NODE);
 
-	if (!Parser_expect(self, OPEN_PAREN_TOKEN))
+	if (!Parser_found(self, OPEN_PAREN_TOKEN))
 		return Parser_error(self, sequence);
 	Parser_step(self);
 	while (!Parser_found(self, CLOSE_PAREN_TOKEN))
 	{
 		Node *elem = Parser_element(self, parent);
-		Node_addchild(sequence, elem);
-
-		/*while (Parser_found(self, COMMA_TOKEN))
+		if (elem->type == EOF_NODE)
 		{
-			Parser_step(self);
-			Node *elem = Parser_element(self, parent);
-			Node_addchild(sequence, elem);
-		}*/
+			del_Node(sequence);
+			return elem;
+		}
+		Node_addchild(sequence, elem);
 	}
 	return sequence;
 }
@@ -232,21 +230,21 @@ int main(int argc, char **argv)
 		fputs(SPLASH_MESSAGE, stderr);
 	}
 	else INTERACTIVE_MODE = 0;
-
+	
 	#ifdef DEBUG
 	PARSER_DEBUG = 1;
 	#endif 
-
+	
 	Parser *my_parser = new_Parser(SOURCE);
 	while (1)
 	{
 		Node *node = Parser_getnext(my_parser);
+		Node_print(node, 0);
 		if (node->type == EOF_NODE)
 		{
 			del_Node(node);
 			break;
 		}
-		Node_print(node, 0);
 	}
 	del_Parser(my_parser);
 	return 0;

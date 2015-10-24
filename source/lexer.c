@@ -3,8 +3,8 @@
 
 
 char * TOKEN_TYPES[] = {"end of file", "symbol", "numeric literal", "string literal",
-						"open paren", "close paren", "comma", "period", "minus",
-						"semicolon", "unknown"};
+			"open paren", "close paren", "comma", "period", "minus",
+			"semicolon", "unknown symbol"};
 
 Token *new_Token(Character *c)
 {
@@ -16,7 +16,6 @@ Token *new_Token(Character *c)
 	self->len = 1;
 	self->cap = 4;
 
-	self->source_text  = c->source_text;
 	self->source_index = c->source_index;
 	self->source_line  = c->source_line;
 	self->source_col   = c->source_col;
@@ -103,7 +102,7 @@ Token *Lexer_getnext(Lexer *self)
 	// begin creating a Token
 	Token *token = new_Token(self->frame);
 
-	if (self->frame->value == '\0')
+	if (self->frame->value == '\0' || self->frame->value == (char)EOF || self->frame->value == 26)
 	{
 		token->type = EOF_TOKEN;
 	}
@@ -134,7 +133,6 @@ Token *Lexer_getnext(Lexer *self)
 			Token_append(token, self->frame);
 			Lexer_step(self);
 		}
-		// TODO check for keywords here
 	}
 
 	else if (Character_isin(self->frame, NUMERIC_CHARS))
@@ -148,7 +146,6 @@ Token *Lexer_getnext(Lexer *self)
 			Token_append(token, self->frame);
 			Lexer_step(self);
 		}
-		// TODO deal with decimals here too
 	}
 
 	else if (Character_isin(self->frame, STRING_LITERAL_CHARS))
@@ -179,8 +176,6 @@ Token *Lexer_getnext(Lexer *self)
 		Lexer_step(self);
 	}
 
-
-	// TODO the rest of operators down here too
 	else
 	{
 		token->type = UNKNOWN_TOKEN;
@@ -198,8 +193,9 @@ int main(int argc, char **argv)
 	if (isatty(fileno(SOURCE)))
 	{
 		INTERACTIVE_MODE = 1;
+		PROMPT = COMMAND_PROMPT;
 		fputs(SPLASH_MESSAGE, stderr);
-		fputs(COMMAND_PROMPT, stderr);
+	
 	}
 	else INTERACTIVE_MODE = 0;
 	
@@ -207,12 +203,12 @@ int main(int argc, char **argv)
 	while (1)
 	{
 		Token *token = Lexer_getnext(my_lexer);
+		printf("%s: %s\n", TOKEN_TYPES[token->type], token->string);
 		if (token->type == EOF_TOKEN)
 		{
 			del_Token(token);
 			break;
 		}
-		printf("%s: %s\n", TOKEN_TYPES[token->type], token->string);
 		del_Token(token);
 	}
 	del_Lexer(my_lexer);

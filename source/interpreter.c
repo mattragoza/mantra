@@ -1,46 +1,75 @@
 #include "mantra.h"
 
-#define OBJ(x) ((Object *)x)
-#define NUM(x) ((NumberObject *)x)
-#define STR(x) ((StringObject *)x)
-#define SEQ(x) ((SequenceObject *)x)
-char * OBJECT_TYPES[] = {"number", "string", "sequence"};
 
 
+char * OBJECT_TYPES[] = {"number", "string", "sequence", "function", "error"};
+char * ERROR_TYPES[] = {"Syntax", "Type", "Reference"};
 
-Object *new_NumberObject(Node *node)
+
+/*
+ * new_NumberObject
+ * 	constructs an Object which contains a numeric value.
+ * 	We do not distinguish between integers and floating-
+ * 	point numbers- internally the NumberObject uses
+ * 	a double-precision floating point representation.
+ */
+Object *new_NumberObject(double value)
 {
 	NumberObject *self = malloc(sizeof(NumberObject));
 	self->ref_count = 0;
 	self->type = NUMBER_OBJECT;
-	self->value = strtod(node->token->string, NULL);
-	return (Object *) self;
+
+	self->value = value;
+	return OBJ(self);
 }
 
-Object *new_StringObject(Node *node)
+Object *new_StringObject(char *string)
 {
 	StringObject *self = malloc(sizeof(StringObject));
 	self->ref_count = 0;
 	self->type = STRING_OBJECT;
-	self->len = node->token->len;
+
+	self->len = strlen(string);
 	self->cap = self->len;
 	self->buffer = malloc((self->cap + 1) * sizeof(char));
-	strncpy(self->buffer, node->token->string, self->len);
+	strncpy(self->buffer, string, self->len);
 	self->buffer[0] = '\'';
 	self->buffer[self->len-1] = '\'';
 	self->buffer[self->len] = '\0';
-	return (Object *) self;
+	return OBJ(self);
 }
 
-Object *new_SequenceObject(Node *node)
+Object *new_SequenceObject(int cap)
 {
 	SequenceObject *self = malloc(sizeof(SequenceObject));
 	self->ref_count = 0;
 	self->type = SEQUENCE_OBJECT;
+
 	self->len = 0;
-	self->cap = node? node->num_children : 4;
+	self->cap = cap;
 	self->elem = malloc(self->cap * sizeof(Object *));
-	return (Object *) self;
+	return OBJ(self);
+}
+
+Object *new_FunctionObject(Object *(*call)())
+{
+	FunctionObject *self = malloc(sizeof(FunctionObject));
+	self->ref_count = 0;
+	self->type = FUNCTION_OBJECT;
+
+	self->call = call;
+	return OBJ(self);
+}
+
+Object *new_ErrorObject(ErrorType err, char *message)
+{
+	printf("%s error: %s\n", ERROR_TYPES[err], message);
+	ErrorObject *self = malloc(sizeof(ErrorObject));
+	self->ref_count = 0;
+	self->type = ERROR_OBJECT;
+	self->err = err;
+	self->message = message;
+	return OBJ(self);
 }
 
 char *Object_tostring(Object *self)
@@ -102,29 +131,63 @@ char *Object_tostring(Object *self)
 
 		return str;
 	}
+
+	else if (self->type == FUNCTION_OBJECT)
+	{
+		return "<function>";
+	}
 	return "?"; //shouldn't be here
 }
 
-void Object_append(Object *a, Object *b)
+
+void SequenceObject_append(SequenceObject *seq, Object *obj)
 {
-	if (a == NULL || b == NULL) return;
-	if (a->type == SEQUENCE_OBJECT)
+	if (seq == NULL || obj == NULL) return;
+	if (seq->len == seq->cap) // 2x resize
 	{
-		SequenceObject *seq = (void *) a;
-		if (seq->len >= seq->cap) // 2x resize
-		{
-			printf("resizing SequenceObject\n");
-			int new_cap = 2 * seq->cap;
-			Object **new_elem = malloc(new_cap * sizeof(Object *));
-			int i = 0;
-			while (i < seq->len)
-				new_elem[i] = seq->elem[i++];
-			seq->cap = new_cap;
-			seq->elem = new_elem;
-		}
-		seq->elem[seq->len] = b;
-		seq->len++;
-	} // TODO handle other object types
+		int new_cap = 2*seq->cap;
+		Object **new_elem = malloc(new_cap*sizeof(Object *));
+		int i = 0;
+		while (i < seq->len) new_elem[i] = seq->elem[i++];
+		free(seq->elem);
+		seq->cap = new_cap;
+		seq->elem = new_elem;
+	}
+	seq->elem[seq->len] = obj;
+	seq->len++;
+	return;
+}
+
+void StringObject_concat(StringObject *str1, StringObject *str2)
+{
+	if (str1 == NULL) str1 = str2;
+	else if (str2 == NULL) return;
+	if (str1->cap < str1->len + str2->len) // adequate resize
+	{
+		int new_cap = str1->len + str2->len;
+		char *new_buffer = malloc((new_cap+1)*sizeof(char));
+		int i = 0;
+		while (i < str1->len) new_buffer[i] = str1->buffer[i++];
+		free(str1->buffer);
+		str1->cap = new_cap;
+		str1->buffer = new_buffer;
+	}
+	str1->buffer[str1->len-1] = '\0';
+	strcat(str1->buffer, str2->buffer+1);
+	str1->len += (str2->len-2);
+	str1->buffer[str1->len] = '\0';
+	//del_Object(str2);
+	return;
+}
+
+void Object_clear(Object *obj)
+{
+	if (obj == NULL) return;
+	if (obj->type == SEQUENCE_OBJECT)
+	{
+		SequenceObject *seq = (void *) obj;
+		seq->len = 0;
+	}
 	return;
 }
 
@@ -158,7 +221,6 @@ long Context_hash(Context *self, char *key)
 		hash = ((hash << 5) + hash) + key[i++];
 	hash = hash % self->cap;
 	if (hash < 0) hash += self->cap;
-	printf("%ld\n", hash);
 	return hash;
 }
 
@@ -198,43 +260,51 @@ void del_Interpreter(Interpreter *self)
 	return;
 }
 
-
 Object *Interpreter_eval(Interpreter *self, Node *node, Context *context)
 {
-	if (node == NULL || node->type == EOF_NODE || node->type == ERROR_NODE)
+	if (node == NULL || node->type == EOF_NODE)
 		return NULL;
 
 	else if (node->type == NUMERIC_LITERAL_NODE)
-		return new_NumberObject(node);
+		return new_NumberObject(strtod(node->token->string, NULL));
 
 	else if (node->type == STRING_LITERAL_NODE)
-		return new_StringObject(node);
+		return new_StringObject(node->token->string);
 
 	else if (node->type == SEQUENCE_NODE)
 	{
-		Object *seq = new_SequenceObject(node);
+		// evaluate each of the sequence's element nodes.
+		// if the first element evaluates to a function,
+		// call that function with the rest of the sequence
+		// as its arguments. otherwise return the whole sequence
+
+		Object *seq = new_SequenceObject(node->num_children);
+		Object *func = NULL;
 		int i = 0;
 		while (i < node->num_children)
 		{
 			Object *elem = Interpreter_eval(self, node->children[i], context);
-			if (elem == NULL) return NULL; //EOF
-			Object_append(seq, elem);
+			if (elem == NULL)
+				return NULL; // EOF
+			else if (i == 0 && elem->type == FUNCTION_OBJECT)
+				func = elem; // this sequence is a functon call
+			else SequenceObject_append(SEQ(seq), elem);
 			i++;
 		}
-		return seq;
+		return func? FUN(func)->call(seq) : seq;
 	}
 
 	else if (node->type == SYMBOL_NODE)
 	{
-		Object *ref = Context_get(context, node->token->string);
-		if (ref == NULL)
-		{
-			printf("Interpreter error at line %d col %d: unbound symbol %s\n",
-				node->token->source_line+1, node->token->source_col+1,
-				node->token->string);
-			exit(1);
-		}
-		return ref;
+		Object *value = Context_get(context, node->token->string);
+		if (value == NULL)
+			return new_ErrorObject(REFERENCE_ERROR, "symbol is not defined in this context");
+		return value;
+	}
+	
+	else if (node->type == ERROR_NODE)
+	{
+		return new_ErrorObject(SYNTAX_ERROR, "parser encountered invalid syntax");
 	}
 }
 
@@ -248,11 +318,11 @@ Object *Interpreter_evalnext(Interpreter *self)
 }
 
 
+
 int main(int argc, char **argv)
 {
 	if (argc < 2) SOURCE = stdin;
 	else SOURCE = fopen(argv[1], "r");
-
 	if (isatty(fileno(SOURCE)))
 	{
 		INTERACTIVE_MODE = 1;
@@ -262,11 +332,14 @@ int main(int argc, char **argv)
 	else INTERACTIVE_MODE = 0;
 
 	Interpreter *mantra = new_Interpreter(SOURCE);
+	Context_set(mantra->global, "+", new_FunctionObject(Builtin_add));
+	Context_set(mantra->global, "-", new_FunctionObject(Builtin_sub));
+
 	while (1)
 	{
 		Object *obj = Interpreter_evalnext(mantra);
 		if (obj == NULL) break;
-
+		
 		char *objstr = Object_tostring(obj);
 		printf("%s\n", objstr);
 		free(objstr);
