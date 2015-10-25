@@ -192,13 +192,13 @@ Node *Parser_getnext(Parser *);			// returns the next command-level node (ie. ch
  * by the ErrorType enumeration.
  */
 typedef enum {
-	NUMBER_OBJECT, STRING_OBJECT, SEQUENCE_OBJECT, FUNCTION_OBJECT, ERROR_OBJECT
+	NUMBER_OBJECT, STRING_OBJECT, SYMBOL_OBJECT, SEQUENCE_OBJECT, FUNCTION_OBJECT, ERROR_OBJECT
 } ObjectType;
-char * OBJECT_TYPES[5];
+char * OBJECT_TYPES[6];
 typedef enum {
-	SYNTAX_ERROR, TYPE_ERROR, REFERENCE_ERROR
+	SYNTAX_ERROR, TYPE_ERROR, REFERENCE_ERROR, DIVISION_ERROR
 } ErrorType;
-char * ERROR_TYPES[3];
+char * ERROR_TYPES[4];
 
 #define Object_HEADER \
 	int ref_count;\
@@ -287,14 +287,14 @@ typedef struct interpreter_t
 } Interpreter;
 Interpreter *new_Interpreter(FILE *);
 void del_Interpreter(Interpreter *);
-Object *Interpreter_eval(Interpreter *, Node *, Context *);
+Object *Interpreter_eval(Interpreter *, Node *, Context *, int);
 Object *Interpreter_evalnext(Interpreter *);
 
 
 
 Object *Builtin_add(SequenceObject *);
-Object *Builtin_sub(SequenceObject *);
-Object *Builtin_mult(SequenceObject *);
-Object *Builtin_div(SequenceObject *);
+Object *Builtin_subtract(SequenceObject *);
+Object *Builtin_multiply(SequenceObject *);
+Object *Builtin_divide(SequenceObject *);
 
 #endif // MANTRA_H

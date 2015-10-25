@@ -2,8 +2,8 @@
 
 
 
-char * OBJECT_TYPES[] = {"number", "string", "sequence", "function", "error"};
-char * ERROR_TYPES[] = {"Syntax", "Type", "Reference"};
+char * OBJECT_TYPES[] = {"number", "string", "symbol", "sequence", "function", "error"};
+char * ERROR_TYPES[] = {"Syntax", "Type", "Reference", "Division"};
 
 
 /*
@@ -33,8 +33,22 @@ Object *new_StringObject(char *string)
 	self->cap = self->len;
 	self->buffer = malloc((self->cap + 1) * sizeof(char));
 	strncpy(self->buffer, string, self->len);
-	self->buffer[0] = '\'';
-	self->buffer[self->len-1] = '\'';
+	self->buffer[0] = '"';
+	self->buffer[self->len-1] = '"';
+	self->buffer[self->len] = '\0';
+	return OBJ(self);
+}
+
+Object *new_SymbolObject(char *string)
+{
+	SymbolObject *self = malloc(sizeof(SymbolObject));
+	self->ref_count = 0;
+	self->type = SYMBOL_OBJECT;
+
+	self->len = strlen(string);
+	self->cap = self->len;
+	self->buffer = malloc((self->cap + 1) * sizeof(char));
+	strncpy(self->buffer, string, self->len);
 	self->buffer[self->len] = '\0';
 	return OBJ(self);
 }
@@ -85,6 +99,15 @@ char *Object_tostring(Object *self)
 	}
 
 	else if (self->type == STRING_OBJECT)
+	{
+		if (!self) printf("the string doesn't exist\n");
+		int str_len = STR(self)->len;
+		char *str = malloc((str_len+1)*sizeof(char));
+		strcpy(str, STR(self)->buffer);
+		return str;
+	}
+
+	else if (self->type == SYMBOL_OBJECT)
 	{
 		if (!self) printf("the string doesn't exist\n");
 		int str_len = STR(self)->len;
@@ -262,52 +285,57 @@ void del_Interpreter(Interpreter *self)
 	return;
 }
 
-Object *Interpreter_eval(Interpreter *self, Node *node, Context *context)
+Object *Interpreter_eval(Interpreter *self, Node *node, Context *context, int quoted)
 {
 	if (node == NULL || node->type == EOF_NODE)
 		return NULL;
-
+	
+	else if (node->type == QUOTE_NODE)
+		return Interpreter_eval(self, node->children[0], context, 1);
+	
 	else if (node->type == NUMERIC_LITERAL_NODE)
 		return new_NumberObject(strtod(node->token->string, NULL));
-
+	
 	else if (node->type == STRING_LITERAL_NODE)
 		return new_StringObject(node->token->string);
-
+	
 	else if (node->type == SEQUENCE_NODE)
 	{
 		// evaluate each of the sequence's element nodes.
 		// if the first element evaluates to a function,
 		// call that function with the rest of the sequence
 		// as its arguments. otherwise return the whole sequence
-
+	
 		Object *seq = new_SequenceObject(node->num_children);
 		Object *func = NULL;
 		int i = 0;
 		while (i < node->num_children)
 		{
-			Object *elem = Interpreter_eval(self, node->children[i], context);
+			Object *elem = Interpreter_eval(self, node->children[i], context, quoted);
 			if (elem == NULL)
 				return NULL; // EOF
-			else if (i == 0 && elem->type == FUNCTION_OBJECT)
+			else if (i == 0 && !quoted && elem->type == FUNCTION_OBJECT)
 				func = elem; // this sequence is a functon call
 			else SequenceObject_append(SEQ(seq), elem);
 			i++;
 		}
 		return func? FUN(func)->call(seq) : seq;
 	}
-
+	
 	else if (node->type == SYMBOL_NODE)
 	{
-		Object *value = Context_get(context, node->token->string);
-		if (value == NULL)
-			return new_ErrorObject(REFERENCE_ERROR, "symbol is not defined in this context", node->token);
-		return value;
+		if (quoted) return new_SymbolObject(node->token->string);
+		else
+		{
+			Object *value = Context_get(context, node->token->string);
+			if (value == NULL)
+				return new_ErrorObject(REFERENCE_ERROR, "symbol is not defined in this context", node->token);
+			return value;
+		}
 	}
 	
 	else if (node->type == ERROR_NODE)
-	{
 		return new_ErrorObject(SYNTAX_ERROR, "parser encountered invalid syntax", node->token);
-	}
 }
 
 Object *Interpreter_evalnext(Interpreter *self)
@@ -316,7 +344,7 @@ Object *Interpreter_evalnext(Interpreter *self)
 	#ifdef DEBUG
 	Node_print(next, 0);
 	#endif
-	return Interpreter_eval(self, next, self->global);
+	return Interpreter_eval(self, next, self->global, 0);
 }
 
 
@@ -335,7 +363,9 @@ int main(int argc, char **argv)
 
 	Interpreter *mantra = new_Interpreter(SOURCE);
 	Context_set(mantra->global, "+", new_FunctionObject(Builtin_add));
-	Context_set(mantra->global, "-", new_FunctionObject(Builtin_sub));
+	Context_set(mantra->global, "-", new_FunctionObject(Builtin_subtract));
+	Context_set(mantra->global, "*", new_FunctionObject(Builtin_multiply));
+	Context_set(mantra->global, "/", new_FunctionObject(Builtin_divide));
 
 	while (1)
 	{

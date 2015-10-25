@@ -1,12 +1,5 @@
 #include "mantra.h"
 
-/*
- * (+ OBJ1 ... OBJn)
- * 	If all arguments are numeric, evaluates their arithmetic sum.
- * 	If all arguments are strings, concatenates them together.
- * 	If all arguments are sequences, joins them into one sequence.
- * 	If argument types are mixed, returns an error.
- */
 Object *Builtin_add(SequenceObject *arg)
 {
 	Object *ret = NULL;
@@ -17,29 +10,15 @@ Object *Builtin_add(SequenceObject *arg)
 		if (elem->type == NUMBER_OBJECT)
 		{
 			if (i == 0) ret = new_NumberObject(NUM(elem)->value);
-			else if (ret->type != NUMBER_OBJECT) 
-			{
-				//del_Object(ret);
-				//del_Object(arg);
-				return new_ErrorObject(TYPE_ERROR, "can't add number to non-number", NULL);
-			}
 			else NUM(ret)->value += NUM(elem)->value;
-		}	
-		else if (elem->type == STRING_OBJECT)
-		{
-			if (i == 0) ret = new_StringObject(STR(elem)->buffer);
-			else if (ret->type != STRING_OBJECT)
-			{
-				return new_ErrorObject(TYPE_ERROR, "can't add string to non-string", NULL);	
-			}
-			else StringObject_concat(STR(ret), STR(elem));
 		}
+		else return new_ErrorObject(TYPE_ERROR, "all arguments to add must be numeric", NULL);
 		i++;
 	}
 	return ret;
 }
 
-Object *Builtin_sub(SequenceObject *arg)
+Object *Builtin_subtract(SequenceObject *arg)
 {
 	Object *ret = NULL;
 	int i = 0;
@@ -57,12 +36,55 @@ Object *Builtin_sub(SequenceObject *arg)
 				double init;
 				if (arg->len == 1) init = -(NUM(elem)->value);
 				else init = NUM(elem)->value;
-				ret = OBJ(new_NumberObject(init));
+				ret = new_NumberObject(init);
 			}
 			else NUM(ret)->value -= NUM(elem)->value;
-
-		} else return NULL;
+		} 
+		else return new_ErrorObject(TYPE_ERROR, "all arguments to subtract must be numeric", NULL);
 		i++;
 	}
 	return ret;
 }
+
+Object *Builtin_multiply(SequenceObject *arg)
+{
+	Object *ret = NULL;
+	int i = 0;
+	while (i < arg->len)
+	{
+		Object *elem = arg->elem[i];
+		if (elem->type == NUMBER_OBJECT)
+		{
+			if (i == 0) ret = new_NumberObject(NUM(elem)->value);
+			else NUM(ret)->value *= NUM(elem)->value;
+		}
+		else return new_ErrorObject(TYPE_ERROR, "all arguments to multiply must be numeric", NULL);
+		i++;
+	}
+	return ret;
+}
+
+Object *Builtin_divide(SequenceObject *arg)
+{
+	Object *ret = NULL;
+	int i = 0;
+	while (i < arg->len)
+	{
+		Object *elem = arg->elem[i];
+		if (elem->type == NUMBER_OBJECT)
+		{
+			if (i == 0) ret = new_NumberObject(NUM(elem)->value);
+			else
+			{
+				if (NUM(elem)->value == 0)
+					return new_ErrorObject(DIVISION_ERROR, "division by zero is undefined", NULL);
+				else
+					NUM(ret)->value /= NUM(elem)->value;
+			}
+		}
+		else return new_ErrorObject(TYPE_ERROR, "all arguments to add must be numeric", NULL);
+		i++;
+	}
+	return ret;
+}
+
