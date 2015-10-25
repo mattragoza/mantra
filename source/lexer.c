@@ -3,8 +3,8 @@
 
 
 char * TOKEN_TYPES[] = {"end of file", "symbol", "numeric literal", "string literal",
-			"open paren", "close paren", "comma", "period", "minus",
-			"semicolon", "unknown symbol"};
+			"open paren", "close paren", "apostrophe", "period",
+			"unknown symbol"};
 
 Token *new_Token(Character *c)
 {
@@ -15,11 +15,11 @@ Token *new_Token(Character *c)
 	self->string[1] = '\0';
 	self->len = 1;
 	self->cap = 4;
-
+	
 	self->source_index = c->source_index;
 	self->source_line  = c->source_line;
 	self->source_col   = c->source_col;
-
+	
 	//self->type = type;
 	del_Character(c); // don't need this anymore
 	return self;
@@ -148,19 +148,24 @@ Token *Lexer_getnext(Lexer *self)
 		}
 	}
 
-	else if (Character_isin(self->frame, STRING_LITERAL_CHARS))
+	else if (self->frame->value == '"')
 	{
-		char quote = self->frame->value;
 		token->type = STRING_LITERAL_TOKEN;
 		Lexer_step(self);
-
-		while (self->frame->value != quote)
+		
+		while (self->frame->value != '"')
 		{
 			Token_append(token, self->frame);
 			Lexer_step(self);
 		}
-
+		
 		Token_append(token, self->frame);
+		Lexer_step(self);
+	}
+
+	else if (self->frame->value == '\'')
+	{
+		token->type = APOSTROPHE_TOKEN;
 		Lexer_step(self);
 	}
 

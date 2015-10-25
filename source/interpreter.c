@@ -61,14 +61,15 @@ Object *new_FunctionObject(Object *(*call)())
 	return OBJ(self);
 }
 
-Object *new_ErrorObject(ErrorType err, char *message)
+Object *new_ErrorObject(ErrorType err, char *message, Token *token)
 {
-	printf("%s error: %s\n", ERROR_TYPES[err], message);
+	printf("%s error: %s %s\n", ERROR_TYPES[err], message, token?token->string:"");
 	ErrorObject *self = malloc(sizeof(ErrorObject));
 	self->ref_count = 0;
 	self->type = ERROR_OBJECT;
 	self->err = err;
 	self->message = message;
+	self->token = token;
 	return OBJ(self);
 }
 
@@ -136,6 +137,7 @@ char *Object_tostring(Object *self)
 	{
 		return "<function>";
 	}
+
 	return "?"; //shouldn't be here
 }
 
@@ -298,13 +300,13 @@ Object *Interpreter_eval(Interpreter *self, Node *node, Context *context)
 	{
 		Object *value = Context_get(context, node->token->string);
 		if (value == NULL)
-			return new_ErrorObject(REFERENCE_ERROR, "symbol is not defined in this context");
+			return new_ErrorObject(REFERENCE_ERROR, "symbol is not defined in this context", node->token);
 		return value;
 	}
 	
 	else if (node->type == ERROR_NODE)
 	{
-		return new_ErrorObject(SYNTAX_ERROR, "parser encountered invalid syntax");
+		return new_ErrorObject(SYNTAX_ERROR, "parser encountered invalid syntax", node->token);
 	}
 }
 

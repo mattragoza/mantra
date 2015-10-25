@@ -21,7 +21,7 @@ Object *Builtin_add(SequenceObject *arg)
 			{
 				//del_Object(ret);
 				//del_Object(arg);
-				return new_ErrorObject(TYPE_ERROR, "can't add number to non-number");
+				return new_ErrorObject(TYPE_ERROR, "can't add number to non-number", NULL);
 			}
 			else NUM(ret)->value += NUM(elem)->value;
 		}	
@@ -30,7 +30,7 @@ Object *Builtin_add(SequenceObject *arg)
 			if (i == 0) ret = new_StringObject(STR(elem)->buffer);
 			else if (ret->type != STRING_OBJECT)
 			{
-				return new_ErrorObject(TYPE_ERROR, "can't add string to non-string");	
+				return new_ErrorObject(TYPE_ERROR, "can't add string to non-string", NULL);	
 			}
 			else StringObject_concat(STR(ret), STR(elem));
 		}

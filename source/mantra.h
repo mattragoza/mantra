@@ -23,7 +23,6 @@ char *PROMPT;		// the command line prompt, which can change for entering a new c
 #define WHITESPACE_CHARS " \t\n"
 #define SYMBOL_CHARS "+-=*/^%%_><abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 #define NUMERIC_CHARS "01234567890"
-#define STRING_LITERAL_CHARS "\"'"
 
 
 
@@ -80,8 +79,8 @@ Character *Scanner_getnext(Scanner *);	// return Character at next position in s
 */
 typedef enum {
 	EOF_TOKEN, SYMBOL_TOKEN, NUMERIC_LITERAL_TOKEN, STRING_LITERAL_TOKEN,
-	OPEN_PAREN_TOKEN, CLOSE_PAREN_TOKEN, COMMA_TOKEN, PERIOD_TOKEN, MINUS_TOKEN,
-	SEMICOLON_TOKEN, UNKNOWN_TOKEN
+	OPEN_PAREN_TOKEN, CLOSE_PAREN_TOKEN, APOSTROPHE_TOKEN, PERIOD_TOKEN,
+	UNKNOWN_TOKEN
 } TokenType;
 char * TOKEN_TYPES[11]; // string representation of TokenTypes
 typedef struct token_t
@@ -132,9 +131,10 @@ Token *Lexer_getnext(Lexer *self);	// returns the next identified Token in the s
  */
 typedef enum {
 	PROGRAM_NODE, ERROR_NODE, EOF_NODE, SEQUENCE_NODE,
-	SYMBOL_NODE, STRING_LITERAL_NODE, NUMERIC_LITERAL_NODE
+	SYMBOL_NODE, STRING_LITERAL_NODE, NUMERIC_LITERAL_NODE,
+	QUOTE_NODE
 } NodeType;
-char * NODE_TYPES[10]; // string representation of NodeTypes
+char * NODE_TYPES[11]; // string representation of NodeTypes
 typedef struct node_t
 {
 	struct token_t *token;		// some have a specific Token representation in the source code
@@ -216,6 +216,11 @@ typedef struct string_object_t {
 	int len, cap;
 	char *buffer;
 } StringObject;
+typedef struct symbol_object_t {
+	Object_HEADER;
+	int len, cap;
+	char *buffer;
+} SymbolObject;
 typedef struct sequence_object_t {
 	Object_HEADER
 	int len, cap;
@@ -234,6 +239,7 @@ typedef struct error_object_t {
 // constructor functions, destructor (TODO), and various utility functions
 Object *new_NumberObject(double);		
 Object *new_StringObject(char *);
+Object *new_SymbolObject(char *);
 Object *new_SequenceObject(int);
 Object *new_FunctionObject(Object *(*)());
 Object *new_ErrorObject(ErrorType, char *, Token *);

@@ -4,7 +4,8 @@
 
 int PARSER_DEBUG;
 char * NODE_TYPES[] = {"program", "error", "end of file", "sequence",
-		       "symbol", "string literal", "numeric literal"};
+		       "symbol", "string literal", "numeric literal",
+		       "quote"};
 
 Node *new_Node(Token *token, NodeType type)
 {
@@ -138,60 +139,53 @@ Node *Parser_element(Parser *self, Node *parent)
 	if (Parser_found(self, SYMBOL_TOKEN))
 	{
 		Node *node = new_Node(self->curr, SYMBOL_NODE);
-		Parser_step(self);
 		return node;
+	}
+
+	else if (Parser_found(self, APOSTROPHE_TOKEN))
+	{
+		Node *quote = new_Node(self->curr, QUOTE_NODE);
+		Parser_step(self);
+		Node *quoted = Parser_element(self, quote);
+		Node_addchild(quote, quoted);
+		return quote;
 	}
 
 	else if (Parser_found(self, STRING_LITERAL_TOKEN))
 	{
 		Node *string = new_Node(self->curr, STRING_LITERAL_NODE);
-		Parser_step(self);
 		return string;
 	}
 
 	else if (Parser_found(self, NUMERIC_LITERAL_TOKEN))
 	{
 		Node *number = new_Node(self->curr, NUMERIC_LITERAL_NODE);
-		Parser_step(self);
 		return number;
 	}
 
 	else if (Parser_found(self, OPEN_PAREN_TOKEN))
 	{
 		Node *sequence = Parser_sequence(self, parent);
-		Parser_step(self);
 		return sequence;
 	}
 
 	else if (Parser_found(self, EOF_TOKEN))
 	{
 		Node *eof = new_Node(self->curr, EOF_NODE);
-		//fprintf(stderr, "Parser error at line %d col %d: expected element or close paren, got %s\n",
-		//		self->curr->source_line+1, self->curr->source_col+1,
-		//		TOKEN_TYPES[self->curr->type]);
 		return eof;
 	}
 
 	else
 	{
-		Node *unexpected = new_Node(self->curr, -1);
-		//fprintf(stderr, "Parser error at line %d col %d: expected element or close paren, got %s\n",
-		//		self->curr->source_line+1, self->curr->source_col+1,
-		//		TOKEN_TYPES[self->curr->type]);
-		Parser_step(self);
+		Node *unexpected = new_Node(self->curr, ERROR_NODE);
 		return Parser_error(self, unexpected);
 	}
 }
 
 Node *Parser_sequence(Parser *self, Node *parent)
 {
-	if (Parser_found(self, EOF_TOKEN))
-		return new_Node(self->curr, EOF_NODE);
+	Node *sequence = new_Node(self->curr, SEQUENCE_NODE);
 
-	Node *sequence = new_Node(NULL, SEQUENCE_NODE);
-
-	if (!Parser_found(self, OPEN_PAREN_TOKEN))
-		return Parser_error(self, sequence);
 	Parser_step(self);
 	while (!Parser_found(self, CLOSE_PAREN_TOKEN))
 	{
@@ -202,6 +196,7 @@ Node *Parser_sequence(Parser *self, Node *parent)
 			return elem;
 		}
 		Node_addchild(sequence, elem);
+		Parser_step(self);
 	}
 	return sequence;
 }
@@ -210,7 +205,7 @@ Node *Parser_getnext(Parser *self)
 {
 	Parser_step(self);
 	PROMPT = CONTINUE_PROMPT;
-	Node *next = Parser_sequence(self, self->root);
+	Node *next = Parser_element(self, self->root);
 	PROMPT = COMMAND_PROMPT;
 	if (next && next->type != EOF_NODE) Node_addchild(self->root, next);
 	return next;
